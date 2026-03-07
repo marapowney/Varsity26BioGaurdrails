@@ -8,9 +8,9 @@ channels:
 dependencies:
   - python=3.10
   - pip
-  # PyTorch via pytorch channel (handles CUDA automatically)
-  - pytorch::pytorch=2.2.0
-  - pytorch::pytorch-cuda=11.8
+  # PyTorch — latest stable, numpy 2.x compatible
+  - pytorch::pytorch
+  - pytorch::pytorch-cuda=12.1
   # bioinformatics
   - bioconda::blast
   - biopython
@@ -19,6 +19,7 @@ dependencies:
       - transformers==4.49.0
       - huggingface_hub
       - datasets<3.0.0
+      - accelerate>=0.26.0
       - scikit-learn
       - matplotlib
       - seaborn
