@@ -1,0 +1,8 @@
+# Requirements for running the Evo2 7B probe (probe.py)
+# Install from probe directory: pip install -r requirements.txt
+
+# Evo2 model for embedding extraction (includes torch, huggingface_hub, biopython, vtx)
+-e git+https://github.com/ArcInstitute/evo2.git@bc7e7bf408f4a275a94bf906660385bc31e720b1#egg=evo2
+
+numpy
+scikit-learn
