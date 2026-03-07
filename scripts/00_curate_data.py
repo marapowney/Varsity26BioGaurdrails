@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT      = Path(__file__).resolve().parents[1]
-BENCH     = ROOT / "GeneBreaker" / "JailbreakDNABench"
+BENCH     = ROOT / "JailbreakDNABench"
 PROCESSED = ROOT / "data" / "processed"
 PROCESSED.mkdir(parents=True, exist_ok=True)
 

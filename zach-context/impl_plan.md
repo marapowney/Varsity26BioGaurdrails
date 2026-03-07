@@ -202,7 +202,8 @@ The two methods are fully independent — no shared weights, no ordering depende
 ## Actual Processed Dataset (Phase 0 output)
 
 **Script:** `scripts/00_curate_data.py`
-**Source:** `GeneBreaker/JailbreakDNABench/` — the only data source used (no external downloads).
+**Source:** `JailbreakDNABench/` — the only data source used (no external downloads).
+> **Path change:** `JailbreakDNABench/` was moved to the project root (was `GeneBreaker/JailbreakDNABench/`). Script updated accordingly.
 
 The script walks every `<family>/patho/*.csv` and `<family>/nopatho/*.csv` file in JailbreakDNABench, reading the `nucleotide_sequence` column. Only families that actually contain CSV files with that column contribute sequences.
 
@@ -1051,17 +1052,38 @@ Pathogen families not separable in t-SNE?
 ## Subgoal Checklist
 
 - [x] **SG0.1** Conda env `biosec` created, numpy/sklearn/biopython/matplotlib installed
-- [x] **SG0.2** GeneBreaker cloned; JailbreakDNABench structure mapped (CSV + GenBank families)
+- [x] **SG0.2** JailbreakDNABench structure mapped (CSV + GenBank families) — now at project root, not `GeneBreaker/`
 - [x] **SG0.3** Benign sequences: nopatho CSVs from JailbreakDNABench (40 seqs, no download)
-- [x] **SG0.4** `data/processed/` saved — 84 seqs (44 patho + 40 benign), 640 nt each
-- [ ] **SG1.1** `kmer_vec` and `cosine` functions implemented and tested
-- [ ] **SG1.2** Per-pathogen reference profiles built and saved to `data/processed/kmer_profiles/`
-- [ ] **SG1.3** K-mer threshold calibrated via ROC analysis
-- [ ] **SG1.4** K-mer AUC computed and reported
-- [ ] **SG2.1** GENERator-v2-eukaryote-1.2b loaded, tokenizer verified (k=6)
+- [x] **SG0.4** `data/processed/` saved — 84 seqs (44 patho + 40 benign), 642 nt each (Influenza 19, HIV 16, Norovirus 9)
+- [x] **SG1.1** `kmer_vec` and `cosine` functions implemented in `scripts/01_kmer_baseline.py`
+- [x] **SG1.2** Per-family profiles saved to `data/processed/kmer_profiles/` (profiles.npy + names.json)
+- [x] **SG1.3** K-mer threshold calibrated via ROC analysis (5% FPR operating point)
+- [x] **SG1.4** K-mer AUC computed; `data/processed/kmer_results.npz` + `plots/roc_kmer.png` saved
+
+### K-mer Results (Phase 1)
+
+| Metric | Value |
+|---|---|
+| AUC — aggregate profile | **0.628** |
+| AUC — max per-family | **0.614** |
+| TPR @ 5% FPR (max-family) | **4.5%** |
+
+Per-family (pathogenic family vs all 40 benign):
+
+| Family | n | AUC (agg) | AUC (max-family) |
+|---|---|---|---|
+| HIV | 16 | 0.733 | 0.553 |
+| Influenza | 19 | 0.654 | 0.578 |
+| Norovirus | 9 | 0.386 | 0.800 |
+
+**Interpretation:** Barely above random overall (AUC 0.628). TPR of 4.5% at 5% FPR means it misses 95% of pathogenic sequences — not useful as a standalone screener. The Norovirus aggregate AUC of 0.386 (below random) is because the HIV+Influenza sequences dominate the aggregate profile, pulling it away from norovirus k-mer space so benign noroviruses score *higher* than pathogenic ones.
+
+**Root cause — and why the probe should do better:** The benign sequences are *close evolutionary relatives* of the pathogens (FIV/SIV/BIV for HIV-1; Influenza D for flu; murine noroviruses). At 640 nt, 5-mer frequency profiles of HIV-1 and SIV are nearly identical — they share the same codons and motifs. K-mers see composition but not meaning: they cannot tell whether a lentiviral sequence targets human CD4 receptors. A model-based representation (GENERator, trained on 386B nt of real DNA) may encode this finer structural distinction, which is the testable hypothesis in Phase 2.
+
+- [ ] **SG2.1** GENERator-v2-eukaryote-1.2b loaded, tokenizer verified (6-mer)
 - [ ] **SG2.2** `get_embedding` function tested on one sequence
-- [ ] **SG2.3** Embeddings extracted for all sequences at 4 layers, saved to `data/embeddings/`
-- [ ] **SG2.4** Probe trained per layer, AUC reported per layer
+- [ ] **SG2.3** Embeddings extracted for all 84 sequences at 4 layers, saved to `data/embeddings/`
+- [ ] **SG2.4** Probe trained per layer, AUC reported per layer (Pipeline with StandardScaler inside CV)
 - [ ] **SG2.5** Best layer identified
 - [ ] **SG3.1** ROC comparison plot (k-mer vs probe) saved
 - [ ] **SG3.2** Per-family stratified AUC table printed
