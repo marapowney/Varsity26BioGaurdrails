@@ -1,0 +1,54 @@
+{
+  "input": {
+    "variants_xlsx": "notebooks/brca1/41586_2018_461_MOESM3_ESM.xlsx",
+    "reference_fasta": "notebooks/brca1/GRCh37.p13_chr17.fna.gz",
+    "window_size": 128,
+    "group_bin_size": 1000,
+    "expected_chromosome": "17",
+    "include_int_as_safe": false,
+    "num_random_safe_windows": 0,
+    "seed": 42,
+    "val_fraction": 0.15,
+    "test_fraction": 0.15,
+    "max_variants": null
+  },
+  "counts": {
+    "n_examples": 7310,
+    "n_groups": 13,
+    "label_counts": {
+      "safe": 6476,
+      "unsafe": 834
+    },
+    "split_counts": {
+      "train": 5246,
+      "val": 1132,
+      "test": 932
+    },
+    "split_label_counts": {
+      "test": {
+        "safe": 816,
+        "unsafe": 116
+      },
+      "train": {
+        "safe": 4665,
+        "unsafe": 581
+      },
+      "val": {
+        "safe": 995,
+        "unsafe": 137
+      }
+    },
+    "skip_counts": {
+      "label_excluded:clinvar=absent,func=INT": 205,
+      "label_excluded:clinvar=uncertain significance,func=INT": 27,
+      "label_excluded:clinvar=conflicting interpretations of pathogenicity,func=INT": 6
+    }
+  },
+  "outputs": {
+    "dataset_full": "probe/data/processed/brca1_v1_128/dataset_full.parquet",
+    "dataset_train": "probe/data/processed/brca1_v1_128/dataset_train.parquet",
+    "dataset_val": "probe/data/processed/brca1_v1_128/dataset_val.parquet",
+    "dataset_test": "probe/data/processed/brca1_v1_128/dataset_test.parquet",
+    "split_manifest": "probe/data/processed/brca1_v1_128/splits.csv"
+  }
+}

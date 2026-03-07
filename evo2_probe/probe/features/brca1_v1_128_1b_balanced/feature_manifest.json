@@ -1,0 +1,26 @@
+{
+  "model_name": "evo2_1b_base",
+  "layer": "blocks.18",
+  "hidden_dim": 1920,
+  "n_unique_sequences": 1613,
+  "splits": {
+    "train": {
+      "path": "probe/features/brca1_v1_128_1b_balanced/embeddings_train.npz",
+      "n_samples": 1162,
+      "n_safe": 581,
+      "n_unsafe": 581
+    },
+    "val": {
+      "path": "probe/features/brca1_v1_128_1b_balanced/embeddings_val.npz",
+      "n_samples": 274,
+      "n_safe": 137,
+      "n_unsafe": 137
+    },
+    "test": {
+      "path": "probe/features/brca1_v1_128_1b_balanced/embeddings_test.npz",
+      "n_samples": 232,
+      "n_safe": 116,
+      "n_unsafe": 116
+    }
+  }
+}
