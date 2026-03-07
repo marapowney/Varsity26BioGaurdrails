@@ -46,10 +46,27 @@ outputs = model(**inputs, output_hidden_states=True, return_dict=True)
 
 Key properties relevant to defense:
 
-- **6-mer tokenizer** (same as PathoLM) — vocabulary of 4096 tokens (4^6, not 4,104)
-- **LLaMA decoder architecture** — actual layer count from `model.config.num_hidden_layers` at runtime (not hardcoded as 28)
-- **eukaryote variant** trained with GCP: embeddings shaped around gene-centric CDS regions — matches JailbreakDNABench target sequences
+- **6-mer tokenizer** (same as PathoLM) — vocabulary of 4128 tokens (4096 6-mers + 32 special tokens)
+- **LLaMA decoder architecture** — 26 transformer layers, hidden_dim=2048 (confirmed at runtime)
 - **~5 GB VRAM** in bf16 — fits alongside other components on any A100
+
+### Eukaryote vs Prokaryote variant
+
+Two 1.2B variants exist at `huggingface.co/collections/GenerTeam/generator-v2`. The choice matters for probe quality:
+
+| | `GENERator-v2-eukaryote-1.2b-base` | `GENERator-v2-prokaryote-1.2b-base` |
+|---|---|---|
+| Training data | RefSeq eukaryotic genes (GCP: gene-centric, discards intergenic) | RefSeq prokaryotic genomes |
+| Viral exposure | Low — eukaryotic viruses excluded from RefSeq eukaryote set | Higher — bacteriophages are common in prokaryotic assemblies |
+| Embedding bias | CDS-shaped: representations tuned for coding sequences | Whole-genome: more diverse sequence contexts |
+| Best for | Coding viral genes (HIV env, SARS-CoV-2 spike) — matches JailbreakDNABench CDSes | May better separate pathogens if viral signal is phage-adjacent |
+
+**Current finding (84-seq POC):** eukaryote model, early layer AUC = 0.622 — barely above k-mer. The probe is likely underpowered at 84 samples. Try the prokaryote variant if eukaryote AUC stays below 0.65 after expanding the dataset. To switch: comment/uncomment the `MODEL_NAME` line in `scripts/02_generator_probes.py`.
+
+Eukaryote is better for this specific dataset. Here's why:
+JailbreakDNABench sequences are CDSes from viruses that infect humans — HIV env, SARS-CoV-2 spike, Influenza HA. These viruses evolved inside eukaryotic cells and their codon usage, regulatory signals, and sequence statistics are shaped by eukaryotic host machinery. The eukaryote GENERator was trained specifically on gene-centric CDS regions via GCP — exactly the type of sequence we're probing. The prokaryote model would have seen bacteriophages (very different from eukaryotic viruses) and no gene-centric CDS bias.
+
+The early layer beating mid/late layers actually fits this: the eukaryote model's later layers are optimised for predicting the next 6-mer in eukaryotic CDS context. Viral sequences are slightly OOD, so later layers' generation-specific features hurt, while early layers capture more generic compositional patterns useful for the probe.
 
 ---
 

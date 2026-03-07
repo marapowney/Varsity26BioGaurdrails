@@ -38,6 +38,10 @@ EMB_DIR.mkdir(parents=True, exist_ok=True)
 PROBE_DIR.mkdir(parents=True, exist_ok=True)
 PLOTS.mkdir(exist_ok=True)
 
+# Two options — swap and rerun to compare:
+#   eukaryote: trained on gene-centric RefSeq (GCP), CDS-biased → better for coding viral genes
+#   prokaryote: trained on prokaryotic RefSeq, more viral/phage exposure → may separate pathogens better
+# MODEL_NAME = "GenerTeam/GENERator-v2-prokaryote-1.2b-base"
 MODEL_NAME = "GenerTeam/GENERator-v2-eukaryote-1.2b-base"
 
 # ── load data ────────────────────────────────────────────────────────────────
