@@ -1,0 +1,28 @@
+===== 1 =====
+Running BLAST...
+Output not flagged by NCBI BLAST ~ No significant matches to pathogenic agents found.
+
+
+Running PathoLM...
+
+Confidence score for non-pathogen: [2.790503]
+
+Final sequence: ATGTCGAAATCGTCATCGTCGTCGTTGTCG
+
+
+===== 2 =====
+Running BLAST...
+Output flagged by NCBI BLAST ~ partial matches to pathogenic agents found.
+
+ Reported details: 86.1% match to Unknown select agent
+ Alignment snippet: gi|746769945|gb|KP193038.1| Uncultured bacterium clone OTU_11 16S ribosomal RNA
+
+
+===== 3 =====
+Running BLAST...
+Output not flagged by NCBI BLAST ~ No significant matches to pathogenic agents found.
+
+
+Running PathoLM...
+
+Confidence score for pathogen: [0.2448512]

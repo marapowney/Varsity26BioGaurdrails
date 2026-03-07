@@ -8,11 +8,11 @@ def encode_sequence(sequence, tokenizer, max_length):
 PATHO_LM = "../Patho-LM/ckpt"
 
 def patho_check(sequence):
-    print("Running PathoLM...")
+    print("\n\nRunning PathoLM...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("\n\n\n" + "=" * 10)
+    print("\n\n" + "=" * 10)
     model = AutoModelForSequenceClassification.from_pretrained(PATHO_LM, ignore_mismatched_sizes=True).to(device)
-    print("=" * 10 + "\n\n\n")
+    print("=" * 10 + "\n\n")
     tokenizer = AutoTokenizer.from_pretrained(PATHO_LM)
     
     inputs = encode_sequence(sequence, tokenizer, tokenizer.model_max_length)
@@ -21,9 +21,6 @@ def patho_check(sequence):
     logits = outputs.logits.cpu().numpy()
     label = np.argmax(logits, axis=1)
     
-    if label:
-        print(f"Pathogenic score: {np.max(logits, axis=1)}")
-    else:
-        print(f"Non-pathogenic score: {np.max(logits, axis=1)}")
+    print(f"Confidence score for {"pathogen" if label else "non-pathogen"}: {np.max(logits, axis=1) - np.min(logits, axis=1)}")
 
     return label

@@ -16,7 +16,7 @@ def final_check(sequence: str) -> None:
     print(f'\nFinal sequence: {sequence}\n')
 
 if __name__ == "__main__":
-    GENERATIONS = "sequence_recovery_results/GENERator-v2-eukaryote-1.2b-base_bfloat16.parquet"
+    GENERATIONS = "sequence_recovery_results/output1.parquet"
     generations = pd.read_parquet(GENERATIONS)
 
     #generate sequence
