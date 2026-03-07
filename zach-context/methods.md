@@ -176,10 +176,31 @@ Output: { flagged: bool,          # True if cosine similarity exceeds threshold
 Requires nothing from Evo2. Reference profiles are built offline from any FASTA files.
 
 ### What it is
-Decompose a DNA sequence into all substrings of length k (k-mers), build a frequency vector, and compute cosine similarity against pre-built reference profiles from known pathogen genomes. High similarity to a pathogen profile → flag.
+
+**Step 1 — what a k-mer is.** Slide a window of length k across the DNA string and collect every substring:
+
+```
+Sequence:  ATGCTTGACAAG
+           ATGCT          ← 5-mer 1
+            TGCTT         ← 5-mer 2
+             GCTTG        ← 5-mer 3
+              CTTGA       ← 5-mer 4  ...
+```
+
+There are 4^5 = 1024 possible 5-mers (AAAAA … TTTTT). Count how many times each appears and normalise → a 1024-number vector. This is the sequence's "fingerprint." No labels involved — just sequence content.
+
+**Step 2 — build reference profiles (offline, done once).** Take all pathogenic sequences for each family, compute their k-mer vectors, and average them. Result: one 1024-number "HIV profile", one "Influenza profile", one "Norovirus profile." These encode what pathogenic sequence composition looks like.
+
+**Step 3 — score a new sequence.** Compute its k-mer vector and measure cosine similarity to each reference profile. Cosine similarity = dot product of the two vectors divided by their lengths — gives a number in [0, 1] where 1 means identical composition. *The highest similarity across all profiles is the score.*
+
+**Step 4 — evaluate with ROC/AUC.** Now we have 84 scores and 84 known labels. AUC answers: *"if I pick one random pathogenic sequence and one random benign sequence, how often does the pathogenic one get a higher score?"* AUC = 1.0 is perfect; AUC = 0.5 is a coin flip. The ROC curve plots True Positive Rate (fraction of pathogens caught) vs False Positive Rate (fraction of benign wrongly flagged) as you sweep the threshold from high to low. A curve hugging the top-left corner is good.
 
 ### Why it works here
 K-mer frequency profiles are organism-specific "fingerprints." Sequences with >90% identity to a pathogen will share the vast majority of their 5-mers with that pathogen, producing a high cosine similarity even if BLAST is not available. Runs in <1ms in pure Python — ideal as a fast pre-filter before slower methods.
+
+### Why it failed here (AUC = 0.628)
+
+The benign sequences are *close evolutionary relatives* of the pathogens — FIV (cat lentivirus) for HIV-1, Influenza D (cattle) for Influenza A/B, murine norovirus for human norovirus. At 640 nt these share nearly identical 5-mer composition. The score distributions of pathogenic and benign sequences overlap massively, so the ROC curve is nearly diagonal. K-mers see *composition* but not *meaning* — they cannot tell whether a lentiviral sequence targets human CD4 receptors or cat CD134. The Norovirus aggregate AUC of 0.386 (below random) is the starkest failure: the aggregate profile averages HIV + Influenza + Norovirus sequences, so it ends up looking more like the non-human noroviruses (benign) than the human ones (pathogenic). This motivates the GENERator probe, which operates on a model-level representation rather than sequence composition.
 
 ### Prior use
 Used in metagenomics classifiers (PaPrBaG, DCiPatho, Kraken2) for taxonomic classification of sequencing reads. **Not applied as a DNA FM defense.**
