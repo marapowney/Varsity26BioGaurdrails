@@ -45,9 +45,12 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
 
 # ── load data ───────────────────────────────────────────────────────────────
 
-sequences = np.load(PROCESSED / "sequences.npy", allow_pickle=True).tolist()
-labels    = np.load(PROCESSED / "labels.npy").tolist()
-families  = np.load(PROCESSED / "families.npy", allow_pickle=True).tolist()
+# Switch to "full" to run on the GenBank-extended dataset
+DATASET = "full"
+_s = "_full" if DATASET == "full" else ""
+sequences = np.load(PROCESSED / f"sequences{_s}.npy", allow_pickle=True).tolist()
+labels    = np.load(PROCESSED / f"labels{_s}.npy").tolist()
+families  = np.load(PROCESSED / f"families{_s}.npy", allow_pickle=True).tolist()
 
 labels_arr = np.array(labels)
 
@@ -159,16 +162,16 @@ ax.set_title("K-mer Baseline ROC (k=5)")
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig(PLOTS / "roc_kmer.png", dpi=150)
-print(f"\nPlot saved to {PLOTS}/roc_kmer.png")
+plt.savefig(PLOTS / f"roc_kmer{_s}.png", dpi=150)
+print(f"\nPlot saved to {PLOTS}/roc_kmer{_s}.png")
 
 # ── save results for phase 3 comparison ─────────────────────────────────────
 
 np.savez(
-    PROCESSED / "kmer_results.npz",
+    PROCESSED / f"kmer_results{_s}.npz",
     agg_scores=agg_scores,
     top_scores=top_scores,
     labels=labels_arr,
     families=np.array(families, dtype=object),
 )
-print("Results saved to data/processed/kmer_results.npz")
+print(f"Results saved to data/processed/kmer_results{_s}.npz")
