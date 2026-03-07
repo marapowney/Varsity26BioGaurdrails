@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.model_selection import StratifiedKFold, cross_validate
@@ -30,19 +31,22 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROOT      = Path(__file__).resolve().parents[1]
 PROCESSED = ROOT / "data" / "processed"
-EMB_DIR   = ROOT / "data" / "embeddings" / "full"
 PROBE_DIR = ROOT / "data" / "probes"
 PLOTS     = ROOT / "plots"
+
+# ── model selection — change this line only, everything else is automatic ─────
+MODEL_NAME = "GenerTeam/GENERator-v2-eukaryote-1.2b-base"
+# MODEL_NAME = "GenerTeam/GENERator-v2-eukaryote-3b-base"
+# MODEL_NAME = "GenerTeam/GENERator-v2-prokaryote-1.2b-base"
+# MODEL_NAME   = "GenerTeam/GENERator-v2-prokaryote-3b-base"
+
+# Short key: e.g. "eukaryote-1.2b", "prokaryote-3b" — used for all output paths
+MODEL_KEY = MODEL_NAME.split("/")[-1].replace("GENERator-v2-", "").replace("-base", "")
+EMB_DIR   = ROOT / "data" / "embeddings" / "full" / MODEL_KEY
 
 EMB_DIR.mkdir(parents=True, exist_ok=True)
 PROBE_DIR.mkdir(parents=True, exist_ok=True)
 PLOTS.mkdir(exist_ok=True)
-
-# Two options — swap and rerun to compare:
-#   eukaryote: trained on gene-centric RefSeq (GCP), CDS-biased → better for coding viral genes
-#   prokaryote: trained on prokaryotic RefSeq, more viral/phage exposure → may separate pathogens better
-# MODEL_NAME = "GenerTeam/GENERator-v2-prokaryote-1.2b-base"
-MODEL_NAME = "GenerTeam/GENERator-v2-eukaryote-1.2b-base"
 
 # ── load data ────────────────────────────────────────────────────────────────
 
@@ -119,6 +123,7 @@ probe_results = {}
 for layer_name, X in embeddings.items():
     pipe = Pipeline([
         ("scaler", StandardScaler()),
+        ("pca",    PCA(n_components=50, random_state=42)),
         ("clf",    LogisticRegression(C=1.0, max_iter=2000, solver="lbfgs", random_state=42)),
     ])
     cv_out = cross_validate(pipe, X, labels_arr, cv=cv,
@@ -142,7 +147,7 @@ best_layer = max(probe_results, key=lambda k: probe_results[k]["auc"])
 print(f"\nBest layer: {best_layer}  (AUC={probe_results[best_layer]['auc']:.3f})")
 
 # Save best probe
-best_probe_path = PROBE_DIR / "best_probe_full.pkl"
+best_probe_path = PROBE_DIR / f"best_probe_full_{MODEL_KEY}.pkl"
 with open(best_probe_path, "wb") as f:
     pickle.dump({
         "pipe":       probe_results[best_layer]["pipe"],
@@ -172,13 +177,13 @@ for fam in patho_families:
 # ── save probe scores ─────────────────────────────────────────────────────────
 
 np.savez(
-    PROCESSED / "probe_results_full.npz",
+    PROCESSED / f"probe_results_full_{MODEL_KEY}.npz",
     probe_scores=probe_scores,
     labels=labels_arr,
     families=np.array(families, dtype=object),
     best_layer=best_layer,
 )
-print("\nProbe scores saved → data/processed/probe_results_full.npz")
+print(f"\nProbe scores saved → data/processed/probe_results_full_{MODEL_KEY}.npz")
 
 # ── ROC comparison plot (SG3.1) ───────────────────────────────────────────────
 
@@ -203,8 +208,8 @@ ax.set_title("K-mer vs GENERator Probe — Pathogenicity Detection ROC (full dat
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig(PLOTS / "roc_comparison_full.png", dpi=150)
-print(f"ROC comparison saved → plots/roc_comparison_full.png")
+plt.savefig(PLOTS / f"roc_comparison_full_{MODEL_KEY}.png", dpi=150)
+print(f"ROC comparison saved → plots/roc_comparison_full_{MODEL_KEY}.png")
 
 # ── per-layer AUC bar chart ───────────────────────────────────────────────────
 
@@ -223,5 +228,5 @@ ax.set_title("GENERator Probe AUC by Layer")
 ax.legend(fontsize=8)
 ax.grid(axis="y", alpha=0.3)
 plt.tight_layout()
-plt.savefig(PLOTS / "probe_per_layer_full.png", dpi=150)
-print(f"Per-layer AUC chart saved → plots/probe_per_layer_full.png")
+plt.savefig(PLOTS / f"probe_per_layer_full_{MODEL_KEY}.png", dpi=150)
+print(f"Per-layer AUC chart saved → plots/probe_per_layer_full_{MODEL_KEY}.png")
