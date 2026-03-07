@@ -30,7 +30,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROOT      = Path(__file__).resolve().parents[1]
 PROCESSED = ROOT / "data" / "processed"
-EMB_DIR   = ROOT / "data" / "embeddings"
+EMB_DIR   = ROOT / "data" / "embeddings" / "full"
 PROBE_DIR = ROOT / "data" / "probes"
 PLOTS     = ROOT / "plots"
 
@@ -46,11 +46,11 @@ MODEL_NAME = "GenerTeam/GENERator-v2-eukaryote-1.2b-base"
 
 # ── load data ────────────────────────────────────────────────────────────────
 
-sequences = np.load(PROCESSED / "sequences.npy", allow_pickle=True).tolist()
-labels    = np.load(PROCESSED / "labels.npy").tolist()
-families  = np.load(PROCESSED / "families.npy", allow_pickle=True).tolist()
+sequences = np.load(PROCESSED / "sequences_full.npy", allow_pickle=True).tolist()
+labels    = np.load(PROCESSED / "labels_full.npy").tolist()
+families  = np.load(PROCESSED / "families_full.npy", allow_pickle=True).tolist()
 labels_arr = np.array(labels)
-print(f"Loaded {len(sequences)} sequences ({sum(labels)} patho, {labels_arr.sum() - sum(labels) + (labels_arr == 0).sum()} benign)")
+print(f"Loaded {len(sequences)} sequences ({sum(labels)} patho, {(labels_arr==0).sum()} benign)")
 
 # ── load model (SG2.1) ────────────────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ best_layer = max(probe_results, key=lambda k: probe_results[k]["auc"])
 print(f"\nBest layer: {best_layer}  (AUC={probe_results[best_layer]['auc']:.3f})")
 
 # Save best probe
-best_probe_path = PROBE_DIR / "best_probe.pkl"
+best_probe_path = PROBE_DIR / "best_probe_full.pkl"
 with open(best_probe_path, "wb") as f:
     pickle.dump({
         "pipe":       probe_results[best_layer]["pipe"],
@@ -172,36 +172,39 @@ for fam in patho_families:
 # ── save probe scores ─────────────────────────────────────────────────────────
 
 np.savez(
-    PROCESSED / "probe_results.npz",
+    PROCESSED / "probe_results_full.npz",
     probe_scores=probe_scores,
     labels=labels_arr,
     families=np.array(families, dtype=object),
     best_layer=best_layer,
 )
-print("\nProbe scores saved → data/processed/probe_results.npz")
+print("\nProbe scores saved → data/processed/probe_results_full.npz")
 
 # ── ROC comparison plot (SG3.1) ───────────────────────────────────────────────
 
-kmer_data   = np.load(PROCESSED / "kmer_results.npz", allow_pickle=True)
-kmer_scores = kmer_data["top_scores"]   # max per-family (best kmer variant)
-
 fig, ax = plt.subplots(figsize=(7, 6))
-for scores, name, color in [
-    (kmer_scores,  f"K-mer max-family (AUC={roc_auc_score(labels_arr, kmer_scores):.3f})", "steelblue"),
-    (probe_scores, f"GENERator probe [{best_layer}] (AUC={roc_auc_score(labels_arr, probe_scores):.3f})", "crimson"),
-]:
+plot_series = [(probe_scores, f"GENERator probe [{best_layer}] (AUC={roc_auc_score(labels_arr, probe_scores):.3f})", "crimson")]
+
+kmer_full_path = PROCESSED / "kmer_results_full.npz"
+if kmer_full_path.exists():
+    kmer_scores = np.load(kmer_full_path, allow_pickle=True)["top_scores"]
+    plot_series.insert(0, (kmer_scores, f"K-mer max-family (AUC={roc_auc_score(labels_arr, kmer_scores):.3f})", "steelblue"))
+else:
+    print("NOTE: kmer_results_full.npz not found — run 01_kmer_baseline.py on full dataset to add k-mer comparison")
+
+for scores, name, color in plot_series:
     fpr, tpr, _ = roc_curve(labels_arr, scores)
     ax.plot(fpr, tpr, lw=2, color=color, label=name)
 
 ax.plot([0, 1], [0, 1], "--", color="gray", alpha=0.5)
 ax.set_xlabel("False Positive Rate")
 ax.set_ylabel("True Positive Rate")
-ax.set_title("K-mer vs GENERator Probe — Pathogenicity Detection ROC")
+ax.set_title("K-mer vs GENERator Probe — Pathogenicity Detection ROC (full dataset)")
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig(PLOTS / "roc_comparison.png", dpi=150)
-print(f"ROC comparison saved → plots/roc_comparison.png")
+plt.savefig(PLOTS / "roc_comparison_full.png", dpi=150)
+print(f"ROC comparison saved → plots/roc_comparison_full.png")
 
 # ── per-layer AUC bar chart ───────────────────────────────────────────────────
 
@@ -220,5 +223,5 @@ ax.set_title("GENERator Probe AUC by Layer")
 ax.legend(fontsize=8)
 ax.grid(axis="y", alpha=0.3)
 plt.tight_layout()
-plt.savefig(PLOTS / "probe_per_layer.png", dpi=150)
-print(f"Per-layer AUC chart saved → plots/probe_per_layer.png")
+plt.savefig(PLOTS / "probe_per_layer_full.png", dpi=150)
+print(f"Per-layer AUC chart saved → plots/probe_per_layer_full.png")

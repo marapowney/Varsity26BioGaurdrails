@@ -1,5 +1,24 @@
 [
+  "Adenoviridae",
+  "B19",
+  "CoronavirusHKU1",
+  "CoronavirusNL63",
+  "CoronavirusOC43",
+  "Denguevirus",
+  "HCV",
   "HIV",
+  "HPV",
+  "Herpesviridae",
   "Influenza",
-  "Norovirus"
+  "Japanese encephalitis virus",
+  "MERS-CoV",
+  "Measles virus",
+  "Mumpsvirus",
+  "Norovirus",
+  "Poliovirus",
+  "Rabiesvirus",
+  "Reovirus",
+  "SARS-CoV-2",
+  "VARV",
+  "Varicella-Zoster Virus"
 ]
