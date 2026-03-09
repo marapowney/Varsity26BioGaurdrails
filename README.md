@@ -8,4 +8,6 @@ In order to tackle bio-terrorism, we've created a novel pipeline:
 
 ### Probing Dashboard
 
-View the interactive [Evo2 Probing Dashboard](https://htmlpreview.github.io/?https://github.com/marapowney/Varsity26BioGaurdrails/blob/main/evo2_probe/probe/dashboard/index.html) to explore probe performance across all 32 Evo2 7B layers.
+View the interactive Evo2 Probing Dashboard to explore probe performance across all 32 Evo2 7B layers:
+- [Inline data version](https://htmlpreview.github.io/?https://github.com/marapowney/Varsity26BioGaurdrails/blob/main/evo2_probe/probe/dashboard/index.html) — single-file, loads instantly (larger download)
+- [Remote fetch version](https://htmlpreview.github.io/?https://github.com/marapowney/Varsity26BioGaurdrails/blob/main/evo2_probe/probe/dashboard/index2.html) — lightweight HTML, fetches data separately
