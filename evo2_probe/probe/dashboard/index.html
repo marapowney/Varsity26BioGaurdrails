@@ -9,18 +9,19 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --surface2: #232733;
-    --border: #2e3345;
-    --text: #e1e4ed;
-    --text-dim: #8b8fa3;
-    --accent: #6c8cff;
-    --accent-dim: #3d5aad;
-    --good: #4ade80;
-    --warn: #fbbf24;
-    --bad: #f87171;
-    --radius: 8px;
+    --bg: #0e1117;
+    --surface: #161b25;
+    --surface2: #1d2231;
+    --border: #272e3f;
+    --text: #cdd4e0;
+    --text-dim: #6e7a95;
+    --accent: #5ba8c8;
+    --accent-dim: #2c6a88;
+    --good: #5ab88a;
+    --warn: #d4a24c;
+    --bad: #c86a6a;
+    --radius: 10px;
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.24), 0 2px 8px rgba(0,0,0,0.16);
   }
 
   html, body { height: 100%; }
@@ -32,6 +33,8 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   header {
@@ -160,12 +163,12 @@
     transition: all 0.12s;
     text-align: center;
   }
-  .layer-btn:hover { border-color: var(--accent-dim); background: #262a38; }
+  .layer-btn:hover { border-color: var(--accent-dim); background: var(--surface2); }
   .layer-btn.active {
     border-color: var(--accent);
     background: var(--accent-dim);
     color: #fff;
-    box-shadow: 0 0 8px rgba(108,140,255,0.25);
+    box-shadow: 0 0 10px rgba(91,168,200,0.2);
   }
 
   /* CENTER PANEL */
@@ -199,7 +202,7 @@
     font-size: 11px;
     font-weight: 400;
     color: var(--accent);
-    background: rgba(108,140,255,0.12);
+    background: rgba(91,168,200,0.12);
     padding: 2px 8px;
     border-radius: 4px;
   }
@@ -224,6 +227,7 @@
     border-radius: var(--radius);
     padding: 10px 12px;
     text-align: center;
+    box-shadow: var(--card-shadow);
   }
   .metric-card .label {
     font-size: 10px;
@@ -245,6 +249,7 @@
     border-radius: var(--radius);
     padding: 4px;
     min-height: 280px;
+    box-shadow: var(--card-shadow);
   }
   .chart-box.full-width { grid-column: 1 / -1; }
 
@@ -279,6 +284,7 @@
     border-radius: var(--radius);
     padding: 4px;
     min-height: 300px;
+    box-shadow: var(--card-shadow);
   }
 
   /* Scrollbar */
@@ -298,10 +304,122 @@
   }
   .loading-overlay.hidden { display: none; }
 
-  @media (max-width: 700px) {
-    .main-grid { grid-template-columns: 1fr; }
-    .left-panel { flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); overflow-x: auto; }
-    .arch-section { flex-direction: row; overflow-x: auto; overflow-y: hidden; }
+  /* Tablet: stack charts while keeping sidebar */
+  @media (max-width: 900px) {
+    .chart-row { grid-template-columns: 1fr; }
+  }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    html, body {
+      height: auto;
+      min-height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      padding: 12px 16px;
+    }
+    header h1 { font-size: 16px; }
+    header .subtitle { font-size: 12px; line-height: 1.4; white-space: normal; }
+
+    .main-grid {
+      grid-template-columns: 1fr;
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+
+    .left-panel {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      overflow: visible;
+    }
+
+    .probe-selector { padding: 12px 16px; }
+    .probe-group {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .probe-btn {
+      width: auto;
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 10px 14px;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .arch-section {
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 8px 12px;
+      align-items: stretch;
+    }
+    .arch-section h3 { align-self: auto; padding-left: 0; margin-bottom: 6px; }
+
+    .arch-block {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      width: 100%;
+    }
+    .arch-endpoint { display: none; }
+    .arch-connector { display: none; }
+    .layer-btn {
+      width: 100%;
+      padding: 10px 4px;
+      font-size: 12px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .content-area {
+      overflow: visible;
+      min-height: auto;
+    }
+
+    .center-panel { padding: 16px; gap: 12px; }
+    .center-placeholder { min-height: 80px; font-size: 13px; padding: 20px; text-align: center; }
+
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .metric-card .number { font-size: 18px; }
+
+    .chart-row { grid-template-columns: 1fr; gap: 12px; }
+    .chart-box { min-height: 280px; }
+
+    .right-panel { padding: 16px; }
+    .compare-controls { flex-wrap: wrap; }
+    .compare-controls select { flex: 1; min-width: 120px; padding: 8px; font-size: 13px; }
+    .cross-chart { min-height: 280px; }
+  }
+
+  /* Small phones */
+  @media (max-width: 480px) {
+    header { padding: 10px 12px; }
+    header h1 { font-size: 14px; }
+    header .subtitle { font-size: 11px; }
+
+    .probe-selector { padding: 10px 12px; }
+    .probe-btn { padding: 8px 10px; font-size: 12px; }
+
+    .arch-section { padding: 6px 10px; max-height: 260px; }
+    .arch-block { gap: 4px; }
+    .layer-btn { padding: 8px 2px; font-size: 11px; min-height: 40px; }
+
+    .center-panel { padding: 12px; }
+    .metrics-grid { gap: 6px; }
+    .metric-card { padding: 8px; }
+    .metric-card .number { font-size: 16px; }
+
+    .right-panel { padding: 12px; }
+    .cross-chart { min-height: 260px; }
   }
 </style>
 </head>
@@ -365,10 +483,10 @@
 const PLOTLY_LAYOUT_BASE = {
   paper_bgcolor: 'rgba(0,0,0,0)',
   plot_bgcolor: 'rgba(0,0,0,0)',
-  font: { color: '#e1e4ed', family: 'Inter, sans-serif', size: 11 },
+  font: { color: '#cdd4e0', family: 'Inter, sans-serif', size: 11 },
   margin: { l: 50, r: 20, t: 36, b: 42 },
-  xaxis: { gridcolor: '#2e3345', zerolinecolor: '#2e3345' },
-  yaxis: { gridcolor: '#2e3345', zerolinecolor: '#2e3345' },
+  xaxis: { gridcolor: '#272e3f', zerolinecolor: '#272e3f' },
+  yaxis: { gridcolor: '#272e3f', zerolinecolor: '#272e3f' },
 };
 
 const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
@@ -378,11 +496,11 @@ let currentProbe = 'linear_full';
 let selectedLayer = null;
 
 function aurocColor(v) {
-  if (v >= 0.8) return '#4ade80';
-  if (v >= 0.7) return '#86efac';
-  if (v >= 0.6) return '#fbbf24';
-  if (v >= 0.5) return '#fb923c';
-  return '#f87171';
+  if (v >= 0.8) return '#5ab88a';
+  if (v >= 0.7) return '#7ec8a4';
+  if (v >= 0.6) return '#d4a24c';
+  if (v >= 0.5) return '#c8885c';
+  return '#c86a6a';
 }
 
 function fmtNum(v, digits = 3) {
@@ -514,7 +632,7 @@ function renderConfusionMatrix(testCm) {
     x: labels_x,
     y: labels_y,
     type: 'heatmap',
-    colorscale: [[0, '#1e293b'], [0.5, '#3d5aad'], [1, '#6c8cff']],
+    colorscale: [[0, '#161b25'], [0.5, '#2c6a88'], [1, '#5ba8c8']],
     showscale: false,
     hovertemplate: '%{y}<br>%{x}<br>Count: %{z}<extra></extra>'
   };
@@ -525,7 +643,7 @@ function renderConfusionMatrix(testCm) {
     annotations: annotations,
     xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'Predicted' },
     yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'Actual', autorange: 'reversed' },
-    margin: { l: 120, r: 20, t: 40, b: 60 },
+    margin: window.innerWidth < 768 ? { l: 80, r: 10, t: 36, b: 50 } : { l: 120, r: 20, t: 40, b: 60 },
   };
 
   Plotly.newPlot('confusionChart', [trace], layout, PLOTLY_CONFIG);
@@ -536,7 +654,7 @@ function renderROCCurve(testRoc, testAuroc) {
     {
       x: [0, 1], y: [0, 1],
       mode: 'lines',
-      line: { color: '#555', dash: 'dash', width: 1 },
+      line: { color: '#3a4258', dash: 'dash', width: 1 },
       name: 'Random',
       hoverinfo: 'skip'
     },
@@ -544,7 +662,7 @@ function renderROCCurve(testRoc, testAuroc) {
       x: testRoc.fpr, y: testRoc.tpr,
       mode: 'lines',
       name: `AUROC = ${fmtNum(testAuroc)}`,
-      line: { color: '#6c8cff', width: 2.5 }
+      line: { color: '#5ba8c8', width: 2.5 }
     }
   ];
 
@@ -553,7 +671,7 @@ function renderROCCurve(testRoc, testAuroc) {
     title: { text: 'ROC Curve', font: { size: 13 } },
     xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'False Positive Rate', range: [0, 1] },
     yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'True Positive Rate', range: [0, 1.02] },
-    legend: { x: 0.4, y: 0.08, bgcolor: 'rgba(0,0,0,0.5)', font: { size: 10 } },
+    legend: { x: 0.4, y: 0.08, bgcolor: 'rgba(14,17,23,0.7)', font: { size: 10 } },
     showlegend: true,
   };
 
@@ -575,13 +693,13 @@ function renderCrossLayerCharts() {
 
   // AUROC & AUPRC chart
   const aurocTraces = [
-    { x, y: extract(probe, 'auroc'), name: `AUROC (${probe.label})`, line: { color: '#6c8cff', width: 2.5 }, mode: 'lines+markers', marker: { size: 5 } },
-    { x, y: extract(probe, 'auprc'), name: `AUPRC (${probe.label})`, line: { color: '#a78bfa', width: 2 }, mode: 'lines+markers', marker: { size: 5 } },
+    { x, y: extract(probe, 'auroc'), name: `AUROC (${probe.label})`, line: { color: '#5ba8c8', width: 2.5 }, mode: 'lines+markers', marker: { size: 5 } },
+    { x, y: extract(probe, 'auprc'), name: `AUPRC (${probe.label})`, line: { color: '#a594de', width: 2 }, mode: 'lines+markers', marker: { size: 5 } },
   ];
   if (compareProbe) {
     aurocTraces.push(
-      { x, y: extract(compareProbe, 'auroc'), name: `AUROC (${compareProbe.label})`, line: { color: '#4ade80', width: 2, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
-      { x, y: extract(compareProbe, 'auprc'), name: `AUPRC (${compareProbe.label})`, line: { color: '#34d399', width: 1.5, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
+      { x, y: extract(compareProbe, 'auroc'), name: `AUROC (${compareProbe.label})`, line: { color: '#5ab88a', width: 2, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
+      { x, y: extract(compareProbe, 'auprc'), name: `AUPRC (${compareProbe.label})`, line: { color: '#7ec8a4', width: 1.5, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
     );
   }
 
@@ -590,7 +708,7 @@ function renderCrossLayerCharts() {
     title: { text: 'AUROC & AUPRC Across Layers (Test)', font: { size: 13 } },
     xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'Layer', dtick: 2 },
     yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'Score', range: [0.4, 1] },
-    legend: { x: 0.01, y: 0.99, bgcolor: 'rgba(0,0,0,0.4)', font: { size: 10 } },
+    legend: { x: 0.01, y: 0.99, bgcolor: 'rgba(14,17,23,0.65)', font: { size: 10 } },
     showlegend: true,
     hovermode: 'x unified',
   };
@@ -599,17 +717,17 @@ function renderCrossLayerCharts() {
 
   // Accuracy, F1, Precision, Recall chart
   const accTraces = [
-    { x, y: extract(probe, 'accuracy'), name: `Accuracy (${probe.label})`, line: { color: '#fb923c', width: 2.5 }, mode: 'lines+markers', marker: { size: 5 } },
-    { x, y: extract(probe, 'f1'), name: `F1 (${probe.label})`, line: { color: '#f87171', width: 2 }, mode: 'lines+markers', marker: { size: 5 } },
-    { x, y: extract(probe, 'precision'), name: `Precision (${probe.label})`, line: { color: '#e879f9', width: 2 }, mode: 'lines+markers', marker: { size: 5 } },
-    { x, y: extract(probe, 'recall'), name: `Recall (${probe.label})`, line: { color: '#fbbf24', width: 2 }, mode: 'lines+markers', marker: { size: 5 } },
+    { x, y: extract(probe, 'accuracy'), name: `Accuracy (${probe.label})`, line: { color: '#d4a24c', width: 2.5 }, mode: 'lines+markers', marker: { size: 5 } },
+    { x, y: extract(probe, 'f1'), name: `F1 (${probe.label})`, line: { color: '#d47878', width: 2 }, mode: 'lines+markers', marker: { size: 5 } },
+    { x, y: extract(probe, 'precision'), name: `Precision (${probe.label})`, line: { color: '#7bc8a0', width: 2 }, mode: 'lines+markers', marker: { size: 5 } },
+    { x, y: extract(probe, 'recall'), name: `Recall (${probe.label})`, line: { color: '#d4b878', width: 2 }, mode: 'lines+markers', marker: { size: 5 } },
   ];
   if (compareProbe) {
     accTraces.push(
-      { x, y: extract(compareProbe, 'accuracy'), name: `Accuracy (${compareProbe.label})`, line: { color: '#38bdf8', width: 2, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
-      { x, y: extract(compareProbe, 'f1'), name: `F1 (${compareProbe.label})`, line: { color: '#22d3ee', width: 1.5, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
-      { x, y: extract(compareProbe, 'precision'), name: `Precision (${compareProbe.label})`, line: { color: '#c084fc', width: 1.5, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
-      { x, y: extract(compareProbe, 'recall'), name: `Recall (${compareProbe.label})`, line: { color: '#d4a017', width: 1.5, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
+      { x, y: extract(compareProbe, 'accuracy'), name: `Accuracy (${compareProbe.label})`, line: { color: '#78b4d4', width: 2, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
+      { x, y: extract(compareProbe, 'f1'), name: `F1 (${compareProbe.label})`, line: { color: '#c4948a', width: 1.5, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
+      { x, y: extract(compareProbe, 'precision'), name: `Precision (${compareProbe.label})`, line: { color: '#a8b4d4', width: 1.5, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
+      { x, y: extract(compareProbe, 'recall'), name: `Recall (${compareProbe.label})`, line: { color: '#c8b880', width: 1.5, dash: 'dot' }, mode: 'lines+markers', marker: { size: 4 } },
     );
   }
 
@@ -618,7 +736,7 @@ function renderCrossLayerCharts() {
     title: { text: 'Classification Metrics Across Layers (Test)', font: { size: 13 } },
     xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'Layer', dtick: 2 },
     yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'Score', range: [0.2, 1] },
-    legend: { x: 0.01, y: 0.99, bgcolor: 'rgba(0,0,0,0.4)', font: { size: 10 } },
+    legend: { x: 0.01, y: 0.99, bgcolor: 'rgba(14,17,23,0.65)', font: { size: 10 } },
     showlegend: true,
     hovermode: 'x unified',
   };
@@ -679,6 +797,12 @@ async function init() {
   document.getElementById('compareSelect').addEventListener('change', renderCrossLayerCharts);
 
   renderAll();
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderAll, 200);
+  });
 }
 
 init();
