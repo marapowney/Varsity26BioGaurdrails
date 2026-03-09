@@ -36,7 +36,6 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     f1_score,
-    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -81,22 +80,36 @@ def parse_args() -> argparse.Namespace:
         "--C-values",
         type=float,
         nargs="+",
-        default=[0.1, 1.0, 10.0, 100.0],
+        # default=[0.001,0.01,0.1, 1.0, 10.0, 100.0],
+        default=[1.0],
         help="Regularization strengths for linear model.",
     )
     p.add_argument(
         "--mlp-hidden",
         type=str,
         nargs="+",
-        default=["256", "256,128", "512", "512,256"],
-        help="Hidden layer sizes to search (comma-separated per config).",
+        # default=["256", "256,128", "512", "512,256"],
+        # default=["512,256"],
+        default=["32,8"],
+        help="Hidden layer sizes to search (comma-separated per config). "
+             "Use 'auto' to derive sizes from input dimensionality.",
     )
     p.add_argument(
         "--mlp-alpha",
         type=float,
         nargs="+",
-        default=[1e-4, 1e-3, 1e-2],
+        # default=[1e-4, 1e-3, 1e-2, 2e-2, 5e-2, 1e-1],
+        # default=[1e-4],
+        default=[1e-2],
         help="L2 regularization strengths for MLP.",
+    )
+    p.add_argument(
+        "--layer",
+        type=str,
+        required=True,
+        help="Transformer block to probe (e.g. 17 or blocks.17). "
+        "'blocks.{layer}' is appended to --features-dir and "
+        "--output-dir so paths match the layout created by extract_embeddings.py.",
     )
     p.add_argument(
         "--calibrate",
@@ -150,23 +163,6 @@ def compute_metrics(y_true: np.ndarray, y_prob: np.ndarray, y_pred: np.ndarray) 
         "tp": int(cm[1, 1]),
     }
 
-    precisions, recalls, thresholds = precision_recall_curve(y_true, y_prob)
-    for target_prec in [0.90, 0.95]:
-        mask = precisions >= target_prec
-        if mask.any():
-            idx = np.where(mask)[0][-1]
-            metrics[f"recall_at_{int(target_prec*100)}prec"] = float(recalls[idx])
-        else:
-            metrics[f"recall_at_{int(target_prec*100)}prec"] = 0.0
-
-    for target_rec in [0.90, 0.95]:
-        mask = recalls >= target_rec
-        if mask.any():
-            idx = np.where(mask)[0][0]
-            metrics[f"precision_at_{int(target_rec*100)}rec"] = float(precisions[idx])
-        else:
-            metrics[f"precision_at_{int(target_rec*100)}rec"] = 0.0
-
     return metrics
 
 
@@ -185,11 +181,6 @@ def format_report(split_name: str, metrics: dict) -> str:
         f"  Recall:    {metrics['recall']:.4f}",
         f"  Accuracy:  {metrics['accuracy']:.4f}",
         f"",
-        f"  Recall @ 90% precision:  {metrics['recall_at_90prec']:.4f}",
-        f"  Recall @ 95% precision:  {metrics['recall_at_95prec']:.4f}",
-        f"  Precision @ 90% recall:  {metrics['precision_at_90rec']:.4f}",
-        f"  Precision @ 95% recall:  {metrics['precision_at_95rec']:.4f}",
-        f"",
         f"  Confusion Matrix:",
         f"                 Predicted",
         f"                 safe  unsafe",
@@ -199,15 +190,39 @@ def format_report(split_name: str, metrics: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_candidates(args: argparse.Namespace) -> list[dict]:
+def _auto_mlp_hidden(input_dim: int) -> list[tuple[int, ...]]:
+    """Generate MLP hidden-layer configs scaled to the input dimensionality."""
+    def _round(n: int, base: int = 8) -> int:
+        return max(base, base * round(n / base))
+
+    d = input_dim
+    configs: list[tuple[int, ...]] = [
+        (_round(d // 2),),
+        (_round(d // 2), _round(d // 4)),
+        (_round(d // 4),),
+        (_round(d // 4), _round(d // 8)),
+    ]
+    # deduplicate while preserving order
+    seen: set[tuple[int, ...]] = set()
+    unique = []
+    for c in configs:
+        if c not in seen:
+            seen.add(c)
+            unique.append(c)
+    return unique
+
+
+def _build_candidates(args: argparse.Namespace, input_dim: int) -> list[dict]:
     """Return a list of hyperparameter dicts to search over."""
     if args.model == "linear":
         return [{"C": c} for c in args.C_values]
 
-    # MLP: grid over hidden sizes x alpha
-    hidden_configs = [
-        tuple(int(x) for x in h.split(",")) for h in args.mlp_hidden
-    ]
+    if args.mlp_hidden == ["auto"]:
+        hidden_configs = _auto_mlp_hidden(input_dim)
+    else:
+        hidden_configs = [
+            tuple(int(x) for x in h.split(",")) for h in args.mlp_hidden
+        ]
     return [
         {"hidden": h, "alpha": a}
         for h in hidden_configs
@@ -235,11 +250,28 @@ def _make_classifier(model_type: str, params: dict, seed: int):
     )
 
 
+def _resolve_layer_dir(base: Path, layer: str) -> Path:
+    """Append ``blocks.{N}`` to *base*."""
+    layer = layer.strip()
+    if layer.isdigit():
+        layer = f"blocks.{layer}"
+    if not layer.startswith("blocks."):
+        raise ValueError(
+            f"Invalid --layer value '{layer}'. "
+            "Expected an integer or 'blocks.N' (e.g. 17 or blocks.17)."
+        )
+    return base / layer
+
+
 def main() -> None:
     args = parse_args()
+
+    args.features_dir = _resolve_layer_dir(args.features_dir, args.layer)
+    args.output_dir = _resolve_layer_dir(args.output_dir, args.layer)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Loading embeddings from {args.features_dir}")
+    print(f"Layer: {args.layer}")
     print(f"Feature type: {args.feature_type}")
 
     X_train, y_train, ids_train = load_split(args.features_dir, "train", args.feature_type)
@@ -256,8 +288,9 @@ def main() -> None:
     X_val_s = scaler.transform(X_val)
     X_test_s = scaler.transform(X_test)
 
-    print(f"\nModel: {args.model}")
-    candidates = _build_candidates(args)
+    input_dim = X_train_s.shape[1]
+    print(f"\nModel: {args.model}  (input dim: {input_dim})")
+    candidates = _build_candidates(args, input_dim)
     print(f"Searching over {len(candidates)} configurations...")
 
     best_auroc = -1.0
@@ -279,7 +312,7 @@ def main() -> None:
         search_results.append(result_entry)
         marker = " <-- best" if auroc > best_auroc else ""
         label = "  ".join(f"{k}={v}" for k, v in params.items())
-        print(f"  {label:<30s}  val AUROC={auroc:.4f}  AUPRC={auprc:.4f}{marker}")
+        tqdm.write(f"  {label:<30s}  val AUROC={auroc:.4f}  AUPRC={auprc:.4f}{marker}")
 
         if auroc > best_auroc:
             best_auroc = auroc
@@ -304,6 +337,7 @@ def main() -> None:
     results = {"config": {
         "model": args.model,
         "feature_type": args.feature_type,
+        "layer": args.layer,
         "best_params": {k: str(v) for k, v in best_params.items()},
         "calibrated": args.calibrate,
         "seed": args.seed,

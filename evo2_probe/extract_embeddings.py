@@ -67,6 +67,34 @@ def _resolve_layer(layer_arg: str, model_name: str) -> str:
     return layer_arg
 
 
+def _parse_layer_spec(spec: str, model_name: str) -> list[str]:
+    """Parse a layer specification like ``0-31``, ``0,5,10``, or ``0-10,15``.
+
+    Returns a sorted list of ``blocks.N`` strings.
+    """
+    valid_names = set(_valid_layer_names(model_name))
+    n = _num_layers_for_model(model_name)
+    layers: set[str] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        halves = part.split("-", 1)
+        if len(halves) == 2 and halves[0].isdigit() and halves[1].isdigit():
+            lo, hi = int(halves[0]), int(halves[1])
+            for i in range(lo, hi + 1):
+                name = f"blocks.{i}"
+                if name not in valid_names:
+                    sys.exit(
+                        f"Error: blocks.{i} out of range for {model_name} "
+                        f"(valid: 0..{n - 1})"
+                    )
+                layers.add(name)
+        else:
+            layers.add(_resolve_layer(part, model_name))
+    return sorted(layers, key=lambda x: int(x.split(".")[1]))
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Extract frozen Evo2 embeddings for the probe dataset."
@@ -81,7 +109,8 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=Path("probe/features/brca1_v1"),
-        help="Directory for embedding outputs.",
+        help="Base directory for embedding outputs. A subdirectory named "
+        "after the layer (e.g. blocks.12/) is created automatically.",
     )
     p.add_argument(
         "--model-name",
@@ -97,6 +126,14 @@ def parse_args() -> argparse.Namespace:
         help="Layer to extract embeddings from. Accepts 'blocks.N' or just N "
         "(e.g. --layer 12 or --layer blocks.12). Defaults to the last block "
         "for the chosen model. Use --list-layers to see valid values.",
+    )
+    p.add_argument(
+        "--layers",
+        type=str,
+        default=None,
+        help="Multiple layers to extract in a single model load, e.g. '0-31' "
+        "or '0,5,10,15'. The model is loaded once and all layers are "
+        "extracted per sequence in one forward pass. Overrides --layer.",
     )
     p.add_argument(
         "--list-layers",
@@ -154,6 +191,35 @@ def extract_single(
     return mean_pool, last_token
 
 
+def extract_multi_layer(
+    model,
+    tokenizer,
+    sequence: str,
+    layer_names: list[str],
+    device: str,
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """Run one sequence and return ``{layer: (mean_pool, last_token)}`` for all requested layers."""
+    input_ids = torch.tensor(
+        tokenizer.tokenize(sequence),
+        dtype=torch.int,
+    ).unsqueeze(0).to(device)
+
+    _, embeddings = model(input_ids, return_embeddings=True, layer_names=layer_names)
+
+    results = {}
+    for layer_name in layer_names:
+        hidden = embeddings[layer_name]  # (1, seq_len, hidden_dim)
+        mean_pool = hidden[0].mean(dim=0).cpu().to(torch.float32).numpy()
+        last_token = hidden[0, -1, :].cpu().to(torch.float32).numpy()
+        results[layer_name] = (mean_pool, last_token)
+
+    del embeddings, input_ids
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    return results
+
+
 def load_checkpoint(checkpoint_path: Path) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     """Load partially completed extraction checkpoint."""
     if not checkpoint_path.exists():
@@ -197,16 +263,20 @@ def main() -> None:
             print(f"  {name}")
         sys.exit(0)
 
-    # Default to last block when --layer is omitted
-    if args.layer is None:
+    # --- resolve which layers to extract ---
+    if args.layers is not None:
+        layer_names = _parse_layer_spec(args.layers, args.model_name)
+    elif args.layer is not None:
+        layer_names = [_resolve_layer(args.layer, args.model_name)]
+    else:
         n = _num_layers_for_model(args.model_name)
-        args.layer = f"blocks.{n - 1}"
-        print(f"No --layer specified; defaulting to last block: {args.layer}")
+        layer_names = [f"blocks.{n - 1}"]
+        print(f"No layer(s) specified; defaulting to last block: {layer_names[0]}")
 
-    # Validate / normalise the layer argument
-    args.layer = _resolve_layer(args.layer, args.model_name)
+    for ln in layer_names:
+        (args.output_dir / ln).mkdir(parents=True, exist_ok=True)
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Layers: {', '.join(layer_names)} ({len(layer_names)} total)")
 
     # --- load dataset ---
     dataset_path = args.dataset_dir / "dataset_full.parquet"
@@ -233,16 +303,43 @@ def main() -> None:
         f"(dedup saves {len(df) - len(unique_hashes)} forward passes)"
     )
 
-    # --- resume from checkpoint ---
-    checkpoint_path = args.output_dir / "_checkpoint.npz"
-    cache = load_checkpoint(checkpoint_path)
-    already_done = sum(1 for h in unique_hashes if h in cache)
-    remaining = [h for h in unique_hashes if h not in cache]
-    if already_done:
-        print(f"  Resuming: {already_done}/{len(unique_hashes)} already cached")
+    # --- per-layer: check completion & load checkpoints ---
+    per_layer_cache: dict[str, dict[str, tuple[np.ndarray, np.ndarray]]] = {}
+    layers_to_extract: list[str] = []
 
-    # --- load model ---
-    if remaining:
+    for layer_name in layer_names:
+        layer_dir = args.output_dir / layer_name
+        if all(
+            (layer_dir / f"embeddings_{s}.npz").exists()
+            for s in ("train", "val", "test")
+        ):
+            print(f"  [{layer_name}] Output files exist — skipping.")
+            continue
+
+        cache = load_checkpoint(layer_dir / "_checkpoint.npz")
+        per_layer_cache[layer_name] = cache
+        layers_to_extract.append(layer_name)
+        already = sum(1 for h in unique_hashes if h in cache)
+        if already:
+            print(f"  [{layer_name}] Resuming: {already}/{len(unique_hashes)} cached")
+
+    if not layers_to_extract:
+        print("\nAll layers fully extracted — nothing to do.")
+        return
+
+    # Sequences that still need at least one layer
+    seqs_remaining = [
+        h for h in unique_hashes
+        if any(h not in per_layer_cache[ln] for ln in layers_to_extract)
+    ]
+
+    print(
+        f"\n  {len(layers_to_extract)} layer(s) to extract, "
+        f"{len(seqs_remaining)} unique sequences need processing"
+    )
+
+    # --- load model (once for all layers) ---
+    if seqs_remaining:
         print(f"\n{'='*60}")
         print(f"PHASE: Model Loading")
         print(f"{'='*60}")
@@ -342,22 +439,22 @@ def main() -> None:
             mem_total = torch.cuda.get_device_properties(0).total_memory / 1e9
             print(f"  GPU memory: {mem_alloc:.1f} / {mem_total:.1f} GB")
 
-        # --- extract embeddings for remaining unique sequences ---
+        # --- extract embeddings for all layers per sequence ---
         print(f"\n{'='*60}")
         print(f"PHASE: Embedding Extraction")
         print(f"{'='*60}")
-        print(f"  Layer: {args.layer}")
-        print(f"  Sequences to process: {len(remaining)}")
+        print(f"  Layers: {', '.join(layers_to_extract)}")
+        print(f"  Sequences to process: {len(seqs_remaining)}")
         print(f"  Checkpoint interval: every {args.checkpoint_every} sequences")
         sys.stdout.flush()
 
-        hidden_dim = None
+        hidden_dim_reported = False
         timings: list[float] = []
         extract_start = time.time()
 
         pbar = tqdm(
-            enumerate(remaining),
-            total=len(remaining),
+            enumerate(seqs_remaining),
+            total=len(seqs_remaining),
             desc="Extracting",
             unit="seq",
             bar_format=(
@@ -367,23 +464,41 @@ def main() -> None:
             ),
         )
         for i, h in pbar:
+            needed_layers = [
+                ln for ln in layers_to_extract
+                if h not in per_layer_cache[ln]
+            ]
+            if not needed_layers:
+                continue
+
             seq = hash_to_seq[h]
             t_seq = time.time()
-            mean_pool, last_token = extract_single(
-                model, model.tokenizer, seq, args.layer, args.device
-            )
+
+            if len(needed_layers) == 1:
+                mp, lt = extract_single(
+                    model, model.tokenizer, seq, needed_layers[0], args.device
+                )
+                per_layer_cache[needed_layers[0]][h] = (mp, lt)
+                if not hidden_dim_reported:
+                    hidden_dim_reported = True
+                    tqdm.write(f"  Hidden dim: {mp.shape[0]}")
+            else:
+                results = extract_multi_layer(
+                    model, model.tokenizer, seq, needed_layers, args.device
+                )
+                for ln, (mp, lt) in results.items():
+                    per_layer_cache[ln][h] = (mp, lt)
+                if not hidden_dim_reported:
+                    hidden_dim_reported = True
+                    sample_mp = next(iter(results.values()))[0]
+                    tqdm.write(f"  Hidden dim: {sample_mp.shape[0]}")
+
             dt = time.time() - t_seq
             timings.append(dt)
-            cache[h] = (mean_pool, last_token)
 
-            if hidden_dim is None:
-                hidden_dim = mean_pool.shape[0]
-                tqdm.write(f"  Hidden dim: {hidden_dim}")
-
-            # Rolling average speed over last 50 sequences
             recent = timings[-50:]
             avg_sec = sum(recent) / len(recent)
-            eta_min = avg_sec * (len(remaining) - i - 1) / 60
+            eta_min = avg_sec * (len(seqs_remaining) - i - 1) / 60
 
             gpu_mb = ""
             if torch.cuda.is_available():
@@ -394,21 +509,29 @@ def main() -> None:
             )
 
             if (i + 1) % args.checkpoint_every == 0:
-                save_checkpoint(checkpoint_path, cache)
+                for ln in layers_to_extract:
+                    save_checkpoint(
+                        args.output_dir / ln / "_checkpoint.npz",
+                        per_layer_cache[ln],
+                    )
                 tqdm.write(
-                    f"  [Checkpoint] {len(cache)}/{len(unique_hashes)} sequences saved "
+                    f"  [Checkpoint] {i + 1}/{len(seqs_remaining)} sequences "
                     f"({time.time() - extract_start:.0f}s elapsed)"
                 )
 
         pbar.close()
-        save_checkpoint(checkpoint_path, cache)
+        for ln in layers_to_extract:
+            save_checkpoint(
+                args.output_dir / ln / "_checkpoint.npz",
+                per_layer_cache[ln],
+            )
 
         total_time = time.time() - extract_start
-        avg_time = total_time / len(remaining) if remaining else 0
+        avg_time = total_time / len(seqs_remaining) if seqs_remaining else 0
         print(f"\n  Extraction complete:")
         print(f"    Total time:  {total_time/60:.1f} min")
         print(f"    Avg speed:   {avg_time:.2f} s/seq")
-        print(f"    Throughput:  {len(remaining)/total_time:.1f} seq/s")
+        print(f"    Throughput:  {len(seqs_remaining)/total_time:.1f} seq/s")
 
         del model
         if torch.cuda.is_available():
@@ -416,64 +539,66 @@ def main() -> None:
     else:
         print("All unique sequences already cached — skipping model load.")
 
-    # --- detect hidden dim from cache ---
-    sample_hash = next(iter(cache))
-    hidden_dim = cache[sample_hash][0].shape[0]
-
-    # --- assemble per-split output files ---
+    # --- write output files per layer ---
     print(f"\n{'='*60}")
     print(f"PHASE: Writing Output Files")
     print(f"{'='*60}")
-    print(f"  Hidden dim: {hidden_dim}")
-    manifest = {
-        "model_name": args.model_name,
-        "layer": args.layer,
-        "hidden_dim": hidden_dim,
-        "n_unique_sequences": len(unique_hashes),
-        "splits": {},
-    }
 
-    for split in ["train", "val", "test"]:
-        split_df = df[df["split"] == split].reset_index(drop=True)
-        n = len(split_df)
+    for layer_name in layers_to_extract:
+        layer_dir = args.output_dir / layer_name
+        cache = per_layer_cache[layer_name]
 
-        sample_ids = split_df["sample_id"].values.astype(str)
-        labels = split_df["label_int"].values.astype(np.int32)
-        mean_pool_arr = np.empty((n, hidden_dim), dtype=np.float32)
-        last_token_arr = np.empty((n, hidden_dim), dtype=np.float32)
+        sample_hash = next(iter(cache))
+        hidden_dim = cache[sample_hash][0].shape[0]
+        print(f"\n  [{layer_name}] hidden_dim={hidden_dim}")
 
-        for idx, seq in enumerate(split_df["sequence"]):
-            h = seq_hash_map[seq]
-            mean_pool_arr[idx] = cache[h][0]
-            last_token_arr[idx] = cache[h][1]
-
-        out_path = args.output_dir / f"embeddings_{split}.npz"
-        np.savez(
-            out_path,
-            sample_ids=sample_ids,
-            labels=labels,
-            mean_pool=mean_pool_arr,
-            last_token=last_token_arr,
-        )
-        manifest["splits"][split] = {
-            "path": str(out_path),
-            "n_samples": n,
-            "n_safe": int((labels == 0).sum()),
-            "n_unsafe": int((labels == 1).sum()),
+        manifest = {
+            "model_name": args.model_name,
+            "layer": layer_name,
+            "hidden_dim": hidden_dim,
+            "n_unique_sequences": len(unique_hashes),
+            "splits": {},
         }
-        print(f"  {split}: {n} samples → {out_path}")
 
-    # --- save manifest ---
-    manifest_path = args.output_dir / "feature_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2))
-    print(f"\nManifest: {manifest_path}")
+        for split in ["train", "val", "test"]:
+            split_df = df[df["split"] == split].reset_index(drop=True)
+            n = len(split_df)
 
-    # --- clean up checkpoint ---
-    if checkpoint_path.exists():
-        checkpoint_path.unlink()
-        print("Checkpoint removed (extraction complete).")
+            sample_ids = split_df["sample_id"].values.astype(str)
+            labels = split_df["label_int"].values.astype(np.int32)
+            mean_pool_arr = np.empty((n, hidden_dim), dtype=np.float32)
+            last_token_arr = np.empty((n, hidden_dim), dtype=np.float32)
 
-    print("Done.")
+            for idx, seq in enumerate(split_df["sequence"]):
+                h = seq_hash_map[seq]
+                mean_pool_arr[idx] = cache[h][0]
+                last_token_arr[idx] = cache[h][1]
+
+            out_path = layer_dir / f"embeddings_{split}.npz"
+            np.savez(
+                out_path,
+                sample_ids=sample_ids,
+                labels=labels,
+                mean_pool=mean_pool_arr,
+                last_token=last_token_arr,
+            )
+            manifest["splits"][split] = {
+                "path": str(out_path),
+                "n_samples": n,
+                "n_safe": int((labels == 0).sum()),
+                "n_unsafe": int((labels == 1).sum()),
+            }
+            print(f"    {split}: {n} samples → {out_path}")
+
+        manifest_path = layer_dir / "feature_manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2))
+
+        checkpoint_path = layer_dir / "_checkpoint.npz"
+        if checkpoint_path.exists():
+            checkpoint_path.unlink()
+            print(f"    Checkpoint removed.")
+
+    print("\nDone.")
 
 
 if __name__ == "__main__":
