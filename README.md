@@ -8,4 +8,4 @@ In order to tackle bio-terrorism, we've created a novel pipeline:
 
 ### Probing Dashboard
 
-View the interactive [Evo2 Probing Dashboard](https://ragharao314159.github.io/evo2_probing_dashboard/) (Inline data version) to explore probe performance across all 32 Evo2 7B layers
+View the interactive [Evo2 Probing Dashboard](https://ragharao314159.github.io/evo2_probing_dashboard/) to explore probe performance across all 32 Evo2 7B layers
