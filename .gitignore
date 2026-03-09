@@ -169,3 +169,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Evo2 probe data
+evo2_probe/probe/features/
+evo2_probe/probe/models/
