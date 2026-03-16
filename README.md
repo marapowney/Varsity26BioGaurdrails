@@ -14,13 +14,13 @@ The guardrail is a three-stage cascade applied to any generated DNA sequence. Ea
 
 ```mermaid
 flowchart LR
-    A["Generated DNA\n(Evo2 / GENERator)"] --> B["Stage 1\nBLAST"]
-    B -->|"≥80% identity\nto known pathogen"| F["🚫 FLAGGED"]
-    B -->|"No hit"| C["Stage 2\nPathoLM"]
-    C -->|"Pathogen class"| F
-    C -->|"Non-pathogen"| D["Stage 3\nActivation Probe"]
-    D -->|"P(unsafe) > τ"| F
-    D -->|"P(unsafe) ≤ τ"| E["✅ RELEASED"]
+    A["Generated DNA"] --> B["BLAST"]
+    B -- "≥80% identity" --> F["FLAGGED"]
+    B -- "No hit" --> C["PathoLM"]
+    C -- "Pathogen" --> F
+    C -- "Non-pathogen" --> D["Activation Probe"]
+    D -- "P unsafe > t" --> F
+    D -- "P unsafe ≤ t" --> E["RELEASED"]
 
     style F fill:#d32f2f,color:#fff
     style E fill:#388e3c,color:#fff
@@ -128,42 +128,42 @@ We freeze the model weights and extract hidden-state vectors at multiple transfo
 ```mermaid
 flowchart TB
     subgraph Input
-        SEQ["DNA Sequence\n(640 nt)"]
+        SEQ["DNA Sequence — 640 nt"]
     end
 
-    subgraph Model["Frozen DNA Foundation Model"]
+    subgraph Model["Frozen Evo2 7B — StripedHyena, 32 layers, hidden dim 4096"]
         direction TB
-        TOK["6-mer Tokeniser\n→ ~107 tokens"] --> EMB["Token Embedding Layer"]
-        EMB --> L1["Transformer Block 1\n(early)"]
-        L1 --> L2["..."]
-        L2 --> LN4["Block n/4\n← Probe Point"]
-        LN4 --> L3["..."]
-        L3 --> LN2["Block n/2\n← Probe Point"]
-        LN2 --> L4["..."]
-        L4 --> L3N4["Block 3n/4\n← Probe Point"]
-        L3N4 --> L5["..."]
-        L5 --> LAST["Block n (final)\n← Probe Point"]
-        LAST --> OUT["Next-Token\nPrediction Head"]
+        TOK["Tokeniser"] --> EMB["Embedding"]
+        EMB --> B0["blocks.0"]
+        B0 --> D1["..."]
+        D1 --> B7["blocks.7"]
+        B7 --> D2["..."]
+        D2 --> B15["blocks.15"]
+        B15 --> D3["..."]
+        D3 --> B23["blocks.23"]
+        B23 --> D4["..."]
+        D4 --> B31["blocks.31"]
+        B31 --> HEAD["Prediction Head"]
     end
 
-    subgraph Probing["Probe Classifier (per layer)"]
+    subgraph Probing["Probe Classifier — per layer"]
         direction TB
-        POOL["Mean-Pool\nacross tokens"] --> SCALE["StandardScaler"]
-        SCALE --> PCA["PCA\n(optional, 50–95%)"]
-        PCA --> LR["Logistic Regression\nor MLP"]
-        LR --> PRED["P(pathogen)"]
+        POOL["Mean-Pool"] --> SCALE["StandardScaler"]
+        SCALE --> PCA["PCA 95%"]
+        PCA --> LR["LogReg or MLP"]
+        LR --> PRED["P pathogen"]
     end
 
     SEQ --> TOK
-    LN4 -. "hidden state\n(1 × hidden_dim)" .-> POOL
-    LN2 -. "hidden state" .-> POOL
-    L3N4 -. "hidden state" .-> POOL
-    LAST -. "hidden state" .-> POOL
+    B7 -. "4096-dim hidden state" .-> POOL
+    B15 -. "4096-dim hidden state" .-> POOL
+    B23 -. "4096-dim hidden state" .-> POOL
+    B31 -. "4096-dim hidden state" .-> POOL
 
-    style LN4 fill:#1565c0,color:#fff
-    style LN2 fill:#1565c0,color:#fff
-    style L3N4 fill:#1565c0,color:#fff
-    style LAST fill:#1565c0,color:#fff
+    style B7 fill:#1565c0,color:#fff
+    style B15 fill:#1565c0,color:#fff
+    style B23 fill:#1565c0,color:#fff
+    style B31 fill:#1565c0,color:#fff
     style PRED fill:#f57f17,color:#000
 ```
 
@@ -185,25 +185,25 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    subgraph Internal["Model Internal State"]
+    subgraph Internal["Internal State"]
         direction TB
-        H["Hidden Representation\nat layer n/2"]
+        H["Hidden state at blocks.15"]
         H --> LP["Linear Probe"]
-        LP --> SCORE["P(pathogen) = 0.92"]
+        LP --> SCORE["P pathogen = 0.92"]
     end
 
-    subgraph External["Model External Behavior"]
+    subgraph External["External Behavior"]
         direction TB
-        GEN["Autoregressive\ngeneration"]
-        GEN --> SEQ["Output: pathogenic\nsequence (>90% identity\nto HIV-1 env)"]
+        GEN["Autoregressive generation"]
+        GEN --> SEQ["Outputs pathogenic sequence"]
     end
 
-    INPUT["Jailbreak\nPrompt"] --> Internal
+    INPUT["Jailbreak Prompt"] --> Internal
     INPUT --> External
 
-    SCORE -. "Model internally\nrepresents this as\npathogenic..." .-> GAP
-    SEQ -. "...but outputs\nit anyway" .-> GAP
-    GAP["Gap Between\nRepresentation\n& Behavior"]
+    SCORE -. "Knows it is pathogenic" .-> GAP
+    SEQ -. "Outputs it anyway" .-> GAP
+    GAP["Representation vs Behavior Gap"]
 
     style SCORE fill:#d32f2f,color:#fff
     style SEQ fill:#d32f2f,color:#fff
@@ -246,17 +246,3 @@ cd evo2_probe
 # 6. Run full pipeline on a sequence
 python src/pipeline/pipeline.py
 ```
-
-## Hardware Requirements
-
-| Component | Minimum GPU | Notes |
-|-----------|------------|-------|
-| GENERator-v2-1.2b | Any GPU (~5 GB VRAM) | bf16 inference |
-| Evo2 1B Base | A100 (80 GB) | Requires Hopper arch or A100 in bf16 |
-| Evo2 7B | A100 (80 GB) | bf16; H100 for FP8 |
-| PathoLM | Any GPU (~2 GB VRAM) | DNABERT-based classifier |
-| K-mer baseline | CPU only | — |
-
-## License
-
-See [LICENSE](LICENSE).
